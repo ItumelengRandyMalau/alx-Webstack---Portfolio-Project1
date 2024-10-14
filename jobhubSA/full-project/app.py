@@ -1,17 +1,17 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
-from flask_login import UserMixin, login_user, logout_user, current_user, LoginManager
-from mongoengine import connect, StringField, BooleanField, EmailField, Document
+from flask_login import UserMixin, login_user, logout_user, current_user, LoginManager, login_required
+from mongoengine import connect, StringField, BooleanField, EmailField, Document, ListField, URLField, DecimalField, ReferenceField, DateTimeField, IntField
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 
 app = Flask(__name__)
 login_manager = LoginManager(app)
 app.secret_key = 'supersecretkey'
 
 # Connecting to MongoDB Atlas
-connect(db="jobhub_db", host="your_mongo_atlas_url")
+connect(db="jobhub_db", host="mongodb+srv://itumeleng:Itumeleng1.@cluster0.3klnl.mongodb.net/")
 
-#creating User model for storing data in mongodb
-
+# Creating User model for storing data in MongoDB
 class User(Document, UserMixin):
     username = StringField(required=True, unique=True)
     email = EmailField(required=True, unique=True)
@@ -19,8 +19,8 @@ class User(Document, UserMixin):
     is_admin = BooleanField(default=False)
     skills = ListField(StringField())
     portfolio = URLField()
-    courses_completed = ListField(StringField())  # Can also be ReferenceField to another model
-    reviews = ListField(StringField())  # Example: ["Great work!", "Very professional"]
+    courses_completed = ListField(StringField())
+    reviews = ListField(StringField())
     is_mentor = BooleanField(default=False)
     mentor_bio = StringField()
 
@@ -34,7 +34,7 @@ class User(Document, UserMixin):
 def load_user(user_id):
     return User.objects(pk=user_id).first()
 
-#signup route
+# Signup route
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
@@ -44,9 +44,9 @@ def signup():
         user.save()
         login_user(user)
         return redirect(url_for('profile'))
-    return render_template('signup.html')
+    return render_template('/signup.html',  user=current_user)
 
-#login route
+# Login route
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -55,13 +55,15 @@ def login():
             login_user(user)
             return redirect(url_for('profile'))
         flash("Invalid login details.")
-    return render_template('login.html')
+    return render_template('login.html',  user=current_user)
+
+# Profile route
 @app.route('/profile')
 @login_required
 def profile():
     return render_template('profile.html', user=current_user)
 
-#defining job_post model
+# Defining JobPost model
 class JobPost(Document):
     title = StringField(required=True)
     company = StringField(required=True)
@@ -70,6 +72,7 @@ class JobPost(Document):
     description = StringField()
     salary = DecimalField()
 
+# Job listings route
 @app.route('/jobs')
 def job_listings():
     location = request.args.get('location')
@@ -82,15 +85,15 @@ def job_listings():
         query['category__icontains'] = category
 
     jobs = JobPost.objects(**query)
-    return render_template('job_listings.html', jobs=jobs)
+    return render_template('job_listings.html', jobs=jobs,  user=current_user)
 
-#creating an application model
-
+# Creating Application model
 class Application(Document):
     user = ReferenceField(User)
     job = ReferenceField(JobPost)
     applied_at = DateTimeField(default=datetime.utcnow)
 
+# Apply job route
 @app.route('/apply/<job_id>', methods=['POST'])
 @login_required
 def apply_job(job_id):
@@ -101,34 +104,37 @@ def apply_job(job_id):
         return redirect(url_for('job_listings'))
     return 'Job not found', 404
 
-#mentorship route
+# Mentorship route
 @app.route('/mentors')
 def mentors():
     mentors = User.objects(is_mentor=True)
-    return render_template('mentors.html', mentors=mentors)
-# definig courses model
+    return render_template('mentors.html', mentors=mentors,  user=current_user)
+
+# Defining Course model
 class Course(Document):
     title = StringField(required=True)
     description = StringField()
     duration = IntField()
 
-# defining user course progress
-
+# Defining UserCourseProgress model
 class UserCourseProgress(Document):
     user = ReferenceField(User)
     course = ReferenceField(Course)
     progress = DecimalField(min_value=0, max_value=100)
 
-#courses route
+# Courses route
 @app.route('/courses')
 def courses():
     courses = Course.objects()
-    return render_template('courses.html', courses=courses)
-#route to getting a specific course by id
+    return render_template('courses.html', courses=courses, user=current_user)
+
+# Route to get specific course by id
 @app.route('/course/<course_id>')
 @login_required
 def course_detail(course_id):
     course = Course.objects(id=course_id).first()
     progress = UserCourseProgress.objects(user=current_user, course=course).first()
-    return render_template('course_detail.html', course=course, progress=progress)
-(venv) itumeleng@LDIL-11:~/alx-Webstack---Portfolio-Project/jobhubSA/full-project$
+    return render_template('course_detail.html', course=course, progress=progress,  user=current_user)
+
+if __name__ == "__main__":
+    app.run(debug=True)
